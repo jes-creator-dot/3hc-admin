@@ -1,0 +1,9 @@
+@media print{
+  body{background:#fff;color:#000}
+  .sidebar,.topbar,.btn,.toolbar,.loading,.toast,.nav,.page-actions,.install-btn,.mobile-toggle{display:none!important}
+  .main{margin:0;width:100%}
+  .page{padding:0}
+  .card{box-shadow:none!important;border:1px solid #ddd!important}
+  .table th,.table td{color:#000!important;border-color:#ddd!important}
+  .badge{background:#eee!important;color:#333!important;border-color:#ccc!important}
+}
