@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3HC Admin — Installer</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  background:linear-gradient(140deg,#0f172a 0%,#1e293b 60%,#1e3a8a 140%);color:#fff;padding:20px}
+.card{background:#fff;color:#0f172a;border-radius:16px;padding:40px 36px;max-width:520px;
+  width:100%;box-shadow:0 24px 60px -20px rgba(0,0,0,.4);text-align:center}
+h1{margin:0 0 8px;font-size:22px}
+p{color:#475569;margin:6px 0 20px;font-size:14px;line-height:1.5}
+button{padding:14px 28px;border-radius:10px;border:0;background:#2563eb;color:#fff;
+  font-size:15px;font-weight:700;cursor:pointer;width:100%}
+button:hover{background:#1d4ed8}
+.log{margin-top:16px;padding:12px;background:#f1f5f9;border-radius:8px;font-family:monospace;
+  font-size:12px;color:#334155;text-align:left;max-height:200px;overflow:auto;white-space:pre-wrap}
+.hidden{display:none}
+.files{text-align:left;font-size:12px;color:#64748b;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>3HC Admin — File Installer</h1>
+  <p>Click the button to download <code>3hc-admin.zip</code> containing all PWA files.</p>
+  <button onclick="build()">⬇ Download 3hc-admin.zip</button>
+  <div id="log" class="log hidden"></div>
+  <div id="files" class="files hidden"></div>
+</div>
+
+<script>
+const FILES = {
+"manifest.webmanifest": `{
+  "name": "3HC Trading — Admin System",
+  "short_name": "3HC Admin",
+  "description": "HR, attendance, payroll, leave, performance and operations management for 3HC Trading.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0d12",
+  "theme_color": "#2563eb",
+  "categories": ["business", "productivity"],
+  "lang": "en-PH",
+  "dir": "ltr",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "prefer_related_applications": false
+}`,
+
+"offline.html": `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2563eb">
+<title>Offline — 3HC Admin</title>
+<link rel="stylesheet" href="./styles/main.css">
+</head>
+<body>
+<div class="offline-screen">
+  <div class="offline-card">
+    <div class="offline-icon">📡</div>
+    <h1>You're offline</h1>
+    <p>The 3HC Admin app can't reach the server right now.</p>
+    <p class="small muted">Your cached pages are still available. Recent changes may not have saved.</p>
+    <div class="offline-actions">
+      <button class="btn primary" onclick="location.reload()">Try again</button>
+      <a class="btn" href="./index.html">Go to dashboard</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>`,
+
+"service-worker.js": `const VERSION = '2026.10.01';
+const SHELL_CACHE = '3hc-shell-' + VERSION;
+const RUNTIME_CACHE = '3hc-runtime-' + VERSION;
+const SHELL_ASSETS = [
+  './','./index.html','./employee.html','./offline.html','./manifest.webmanifest',
+  './styles/main.css','./styles/print.css',
+  './js/app.js','./js/api.js','./js/state.js','./js/router.js',
+  './js/lib/dom.js','./js/lib/format.js','./js/lib/toast.js',
+  './js/ui/dashboard.js','./js/ui/employees.js','./js/ui/attendance.js',
+  './js/ui/payroll.js','./js/ui/leave.js','./js/ui/performance.js',
+  './js/ui/products.js','./js/ui/sales.js','./js/ui/loans.js',
+  './js/ui/reports.js','./js/ui/announcements.js','./js/ui/forum.js','./js/ui/activity.js',
+  './icons/icon-192.png','./icons/icon-512.png'
+];
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(SHELL_CACHE).then(c => c.addAll(SHELL_ASSETS).catch(()=>{})).then(() => self.skipWaiting()));
+});
+self.addEventListener('activate', e => {
+  e.waitUntil(caches.keys().then(keys => Promise.all(
+    keys.filter(k => k !== SHELL_CACHE && k !== RUNTIME_CACHE).map(k => caches.delete(k))
+  )).then(() => self.clients.claim()));
+});
+self.addEventListener('fetch', e => {
+  const req = e.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.hostname.indexOf('script.google.com') !== -1 ||
+      url.hostname.indexOf('script.googleusercontent.com') !== -1 ||
+      url.hostname.indexOf('googleapis.com') !== -1) return;
+  if (req.mode === 'navigate' || req.destination === 'document') {
+    e.respondWith(fetch(req).then(res => {
+      const copy = res.clone();
+      caches.open(RUNTIME_CACHE).then(c => c.put(req, copy));
+      return res;
+    }).catch(() => caches.match(req).then(c => c || caches.match('./offline.html'))));
+    return;
+  }
+  e.respondWith(caches.match(req).then(c => c || fetch(req).then(res => {
+    if (res && res.ok) {
+      const copy = res.clone();
+      caches.open(RUNTIME_CACHE).then(c => c.put(req, copy));
+    }
+    return res;
+  })));
+});
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
+});`,
+
+"styles/main.css": `:root{--bg:#f4f6f9;--surface:#fff;--surface-2:#f8fafc;--surface-3:#f1f5f9;--surface-hover:#f7f9fc;--line:#e5e9ef;--line-2:#d8dee7;--line-strong:#c7ced8;--text:#0f172a;--text-2:#3f4a5c;--text-3:#7a8698;--accent:#2563eb;--accent-2:#1d4ed8;--accent-soft:#eef4ff;--accent-soft-2:#dbe8ff;--accent-border:#bfd4ff;--sidebar:#0b0d12;--sidebar-2:#07090d;--sidebar-line:rgba(255,255,255,.06);--sidebar-text:#b9c1cf;--success:#15803d;--success-soft:#ecfdf3;--success-border:#bbf7d0;--warning:#b45309;--warning-soft:#fffbeb;--warning-border:#fde68a;--danger:#b91c1c;--danger-soft:#fef2f2;--danger-border:#fecaca;--shadow-xs:0 1px 2px rgba(15,23,42,.04);--shadow-sm:0 1px 3px rgba(15,23,42,.06);--shadow:0 4px 16px -4px rgba(15,23,42,.08);--shadow-md:0 10px 30px -8px rgba(15,23,42,.12);--shadow-lg:0 24px 60px -20px rgba(15,23,42,.18)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:13px/1.5 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:transparent}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.app{display:flex;min-height:100vh}
+.sidebar{width:220px;padding:20px 12px;position:fixed;inset:0 auto 0 0;background:linear-gradient(180deg,var(--sidebar),var(--sidebar-2));color:var(--sidebar-text);z-index:20;overflow-y:auto;border-right:1px solid #0a0c10}
+.brand{padding:4px 12px 20px;border-bottom:1px solid var(--sidebar-line);margin-bottom:14px}
+.brand b{display:block;font-size:18px;font-weight:800;letter-spacing:-.02em;color:#fff}
+.brand small{display:block;margin-top:5px;color:#6b7688;font-size:10px;text-transform:uppercase;letter-spacing:.14em;font-weight:600}
+.nav{display:grid;gap:3px}
+.nav .section{padding:16px 12px 6px;color:#5a6577;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+.nav button{display:flex;align-items:center;min-height:38px;padding:9px 14px;border-radius:8px;color:var(--sidebar-text);font-size:13px;font-weight:600;text-align:left;transition:all .14s}
+.nav button:hover{background:rgba(255,255,255,.045);color:#fff}
+.nav button.active{background:linear-gradient(90deg,rgba(37,99,235,.18),rgba(37,99,235,.06));color:#fff;box-shadow:inset 3px 0 0 var(--accent),0 0 0 1px rgba(37,99,235,.20)}
+.main{margin-left:220px;width:calc(100% - 220px);display:flex;flex-direction:column;min-width:0}
+.topbar{position:sticky;top:0;z-index:10;height:64px;padding:0 22px;display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.topbar>b{font-size:16px;font-weight:750;color:var(--text)}
+.topbar-right{display:flex;gap:10px;align-items:center}
+#syncStatus{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);color:var(--text-3);font-size:11px;font-weight:600}
+#syncStatus:before{content:"";width:6px;height:6px;border-radius:50%;background:#22c55e}
+#syncStatus.busy:before{background:#f59e0b;animation:pulse 1s infinite}
+#syncStatus.offline:before{background:#ef4444}
+@keyframes pulse{50%{opacity:.35}}
+.page{padding:20px 20px 40px}
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+.page-head h1{position:relative;padding-bottom:12px;font-size:22px;font-weight:800;margin:0 0 6px}
+.page-head h1:after{content:"";position:absolute;left:0;bottom:0;width:32px;height:2px;background:var(--accent)}
+.subtitle{font-size:13px;color:var(--text-3);max-width:760px}
+.page-actions{display:flex;gap:8px;flex-wrap:wrap}
+.grid{display:grid;gap:16px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-bottom:18px}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+.cols-2{grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr)}
+.card{background:var(--surface);border-radius:14px;padding:20px;box-shadow:var(--shadow);min-width:0}
+.kpi{padding:20px;position:relative}
+.kpi:before{content:"";position:absolute;top:20px;left:20px;width:28px;height:3px;background:var(--accent)}
+.kpi .label{font-size:10px;font-weight:800;letter-spacing:.10em;text-transform:uppercase;color:var(--text-3);margin-top:12px}
+.kpi .value{font-size:30px;font-weight:800;letter-spacing:-.035em;margin-top:6px;line-height:1.1}
+.kpi .note{font-size:11px;color:var(--text-3);margin-top:6px}
+.mini-kpi{background:var(--surface);border-radius:10px;padding:16px;box-shadow:var(--shadow-sm)}
+.mini-kpi .label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.mini-kpi .value{font-size:18px;font-weight:800;margin-top:6px}
+h1{font-size:22px;margin:0 0 4px;font-weight:800}
+h2{font-size:16px;margin:0;font-weight:750}
+h3{font-size:14px;margin:0 0 10px;font-weight:700}
+.muted{color:var(--text-3)}
+.small{font-size:12px}
+.right{text-align:right}
+.mt{margin-top:16px}
+.mb{margin-bottom:16px}
+.hidden{display:none!important}
+.danger-text{color:var(--danger)}
+.success-text{color:var(--success)}
+.section-title{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:36px;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid var(--line-2);background:var(--surface);color:var(--text);transition:all .14s;white-space:nowrap;box-shadow:var(--shadow-xs);text-decoration:none}
+.btn:hover{background:var(--surface-2);border-color:var(--line-strong);text-decoration:none}
+.btn:active{transform:translateY(1px)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:var(--accent-2);transform:translateY(-1px)}
+.btn.danger{color:var(--danger);border-color:var(--danger-border)}
+.btn.danger:hover{background:var(--danger-soft)}
+.btn.small-btn{min-height:30px;padding:5px 10px;font-size:12px}
+.btn.ghost{background:transparent;box-shadow:none}
+input,select,textarea{width:100%;min-height:38px;padding:9px 12px;border-radius:8px;border:1px solid var(--line-2);background:var(--surface);color:var(--text);outline:none;font-size:13px;transition:all .14s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+input:disabled,select:disabled,textarea:disabled{background:var(--surface-2);color:var(--text-3);cursor:not-allowed}
+select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,#64748b 50%),linear-gradient(135deg,#64748b 50%,transparent 50%);background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px;background-repeat:no-repeat;padding-right:34px}
+textarea{min-height:110px;resize:vertical;line-height:1.55}
+.field{display:grid;gap:6px}
+.field label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3)}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.form .full{grid-column:1/-1}
+.toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-bottom:14px}
+.toolbar .grow{flex:1;min-width:180px}
+.table-wrap{overflow-x:auto;max-width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
+.table th{padding:11px 12px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);background:#fafbfd;border-bottom:1px solid var(--line);white-space:nowrap}
+.table td{padding:12px;border-bottom:1px solid var(--line);color:var(--text-2);vertical-align:middle}
+.table tr:hover td{background:var(--surface-hover)}
+.table tr:last-child td{border-bottom:0}
+.table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.table td b{color:var(--text);font-weight:700}
+.empty{text-align:center;padding:40px 20px;color:var(--text-3)}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;background:var(--surface-3);color:var(--text-2);border:1px solid var(--line)}
+.badge:before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.green{background:var(--success-soft);color:var(--success);border-color:var(--success-border)}
+.badge.amber{background:var(--warning-soft);color:var(--warning);border-color:var(--warning-border)}
+.badge.red{background:var(--danger-soft);color:var(--danger);border-color:var(--danger-border)}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.5);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;padding:22px;z-index:60}
+.modal.open{display:flex}
+.modal-box{background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);width:min(920px,100%);max-height:90vh;overflow:auto}
+.modal-head{position:sticky;top:0;z-index:2;padding:18px 24px;border-bottom:1px solid var(--line);background:var(--surface);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.modal-head h2{margin:0 0 4px;font-size:18px}
+.modal-body{padding:22px 24px}
+.modal-foot{position:sticky;bottom:0;padding:16px 24px;border-top:1px solid var(--line);background:var(--surface);display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.toast{position:fixed;right:24px;bottom:24px;padding:12px 18px;border-radius:10px;background:#0f172a;color:#fff;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);display:none;z-index:120;max-width:420px}
+.toast.show{display:block}
+.toast.error{background:var(--danger)}
+.toast:before{content:"";display:inline-block;width:8px;height:8px;margin-right:10px;border-radius:50%;background:#4ade80;vertical-align:middle}
+.toast.error:before{background:#fecaca}
+.loading{position:fixed;inset:0;background:rgba(255,255,255,.65);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:110}
+.loading.show{display:flex}
+.spinner{width:38px;height:38px;border-radius:50%;border:3px solid var(--accent-soft-2);border-top-color:var(--accent);animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.offline-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px}
+.offline-card{background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);padding:40px 36px;max-width:420px;width:100%;text-align:center}
+.offline-icon{font-size:52px;margin-bottom:14px}
+.offline-card h1{font-size:22px;margin:0 0 10px}
+.offline-card p{color:var(--text-2);margin:6px 0}
+.offline-actions{display:flex;gap:10px;justify-content:center;margin-top:20px;flex-wrap:wrap}
+.install-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:99px;background:var(--accent-soft);border:1px solid var(--accent-border);color:var(--accent-2);font-size:12px;font-weight:700}
+@media(max-width:900px){.sidebar{transform:translateX(-100%);transition:transform .2s;width:260px}.sidebar.open{transform:translateX(0)}.main{margin-left:0;width:100%}.cols-2{grid-template-columns:1fr}.mobile-toggle{display:inline-flex!important}}
+.mobile-toggle{display:none}`,
+
+"styles/print.css": `@media print{body{background:#fff;color:#000}.sidebar,.topbar,.btn,.toolbar,.loading,.toast,.nav{display:none!important}.main{margin:0;width:100%}.page{padding:0}.card{box-shadow:none!important;border:1px solid #ddd!important}.table th,.table td{color:#000!important;border-color:#ddd!important}}`,
+
+"icons/README.txt": `Placeholder icons required here:
+- icon-192.png       (192x192 PNG)
+- icon-512.png       (512x512 PNG)
+- maskable-512.png   (512x512 PNG, safe area = inner 80%)
+- apple-touch-icon.png (180x180 PNG)
+
+Generate placeholder icons by opening any browser console and pasting:
+
+function makeIcon(size,bg='#2563eb',fg='#fff',t='3HC'){
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const x=c.getContext('2d');x.fillStyle=bg;x.fillRect(0,0,size,size);
+  x.fillStyle=fg;x.font='bold '+(size*0.32)+'px Arial';
+  x.textAlign='center';x.textBaseline='middle';x.fillText(t,size/2,size/2);
+  return c.toDataURL('image/png');
+}
+[192,512,180].forEach(s=>{const a=document.createElement('a');
+  a.href=makeIcon(s);a.download='icon-'+s+'.png';a.click();});
+`,
+
+"js/app.js": `// Boot — see Batch 6A for full implementation.
+// Placeholder so service worker doesn't 404.
+console.log('[3HC] Shell loaded. Awaiting Batch 6A.');`,
+"js/api.js": `export function api(){throw new Error('Batch 6A pending.')}`,
+"js/state.js": `export const state={}`,
+"js/router.js": `export function go(p){location.hash=p}`,
+"js/lib/dom.js": `export const $=id=>document.getElementById(id);export const $$=s=>[...document.querySelectorAll(s)];`,
+"js/lib/format.js": `export const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));`,
+"js/lib/toast.js": `export function toast(m){console.log(m)}`,
+"js/ui/dashboard.js": `export const render=()=>{};`,
+"js/ui/employees.js": `export const render=()=>{};`,
+"js/ui/attendance.js": `export const render=()=>{};`,
+"js/ui/payroll.js": `export const render=()=>{};`,
+"js/ui/leave.js": `export const render=()=>{};`,
+"js/ui/performance.js": `export const render=()=>{};`,
+"js/ui/products.js": `export const render=()=>{};`,
+"js/ui/sales.js": `export const render=()=>{};`,
+"js/ui/loans.js": `export const render=()=>{};`,
+"js/ui/reports.js": `export const render=()=>{};`,
+"js/ui/announcements.js": `export const render=()=>{};`,
+"js/ui/forum.js": `export const render=()=>{};`,
+"js/ui/activity.js": `export const render=()=>{};`,
+
+"index.html": `<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="3HC Admin">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/main.css">
+<title>3HC Trading — Admin System</title>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar" id="sidebar">
+<div class="brand"><b>3HC Trading</b><small>Admin Management</small></div>
+<nav class="nav" id="nav">
+<button data-page="dashboard" class="active">Dashboard</button>
+<div class="section">People</div>
+<button data-page="hr">HR / Employees</button>
+<button data-page="attendance">Attendance</button>
+<button data-page="leave">Leave</button>
+<button data-page="performance">Performance</button>
+<div class="section">Catalog</div>
+<button data-page="products">Products</button>
+<div class="section">Finance & Operations</div>
+<button data-page="sales">Sales / Orders</button>
+<button data-page="payroll">Payroll</button>
+<button data-page="loans">Cash Advances / Loans</button>
+<button data-page="reports">Reports & Expenses</button>
+<div class="section">System</div>
+<button data-page="announcements">Announcements</button>
+<button data-page="forum">Forum / Discussions</button>
+<button data-page="activity">Activity Log</button>
+</nav>
+</aside>
+<main class="main">
+<header class="topbar">
+<div style="display:flex;align-items:center;gap:10px">
+<button class="btn small-btn mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')">☰</button>
+<b id="topTitle">Dashboard</b>
+</div>
+<div class="topbar-right">
+<button class="install-btn hidden" id="installBtn">📲 Install</button>
+<span id="syncStatus">Ready</span>
+</div>
+</header>
+<section class="page" id="page">
+<div id="page-dashboard" class="view" data-page="dashboard"></div>
+<div id="page-hr" class="view hidden" data-page="hr"></div>
+<div id="page-attendance" class="view hidden" data-page="attendance"></div>
+<div id="page-leave" class="view hidden" data-page="leave"></div>
+<div id="page-performance" class="view hidden" data-page="performance"></div>
+<div id="page-products" class="view hidden" data-page="products"></div>
+<div id="page-sales" class="view hidden" data-page="sales"></div>
+<div id="page-payroll" class="view hidden" data-page="payroll"></div>
+<div id="page-loans" class="view hidden" data-page="loans"></div>
+<div id="page-reports" class="view hidden" data-page="reports"></div>
+<div id="page-announcements" class="view hidden" data-page="announcements"></div>
+<div id="page-forum" class="view hidden" data-page="forum"></div>
+<div id="page-activity" class="view hidden" data-page="activity"></div>
+</section>
+</main>
+</div>
+<div class="modal" id="modal"><div class="modal-box"><div class="modal-head"><h2 id="modalTitle">Form</h2><button class="btn" onclick="document.getElementById('modal').classList.remove('open')">Close</button></div><div class="modal-body" id="modalBody"></div><div class="modal-foot" id="modalFoot"></div></div></div>
+<div class="toast" id="toast"></div>
+<div class="loading" id="loading"><div class="spinner"></div></div>
+<script type="module" src="./js/app.js"></script>
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('./service-worker.js').catch(e=>console.warn('[SW]',e))})}
+document.querySelectorAll('.nav button[data-page]').forEach(b=>b.addEventListener('click',()=>{
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+  const v=document.getElementById('page-'+b.dataset.page);
+  if(v)v.classList.remove('hidden');
+  document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById('topTitle').textContent=b.textContent;
+}));
+</script>
+</body>
+</html>`,
+
+"employee.html": `<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#2563eb"><title>3HC — Employee Portal</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./styles/main.css">
+</head><body>
+<div class="offline-screen">
+  <div class="offline-card">
+    <h1>3HC Employee Portal</h1>
+    <p>Coming in Batch 6B.</p>
+    <p class="small muted">The employee portal will be fully wired after the admin dashboard is complete.</p>
+    <a class="btn primary" href="./index.html">Open Admin App</a>
+  </div>
+</div>
+</body></html>`
+};
+
+function build(){
+  const log = document.getElementById('log');
+  const filesList = document.getElementById('files');
+  log.classList.remove('hidden');
+  log.textContent = 'Building zip...\n';
+
+  const zip = [];
+  const encoder = new TextEncoder();
+
+  function u16(n){ return [n & 0xFF, (n>>8) & 0xFF]; }
+  function u32(n){ return [n & 0xFF, (n>>8)&0xFF, (n>>16)&0xFF, (n>>24)&0xFF]; }
+
+  const names = Object.keys(FILES);
+  const centralDir = [];
+  let offset = 0;
+
+  names.forEach(name => {
+    const data = encoder.encode(FILES[name]);
+    const nameBytes = encoder.encode(name);
+    const crc = crc32(data);
+
+    const local = [
+      ...u32(0x04034b50),
+      ...u16(20), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0),
+      ...u32(crc),
+      ...u32(data.length), ...u32(data.length),
+      ...u16(nameBytes.length), ...u16(0),
+      ...nameBytes, ...data
+    ];
+    zip.push(...local);
+
+    const central = [
+      ...u32(0x02014b50),
+      ...u16(20), ...u16(20), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0),
+      ...u32(crc),
+      ...u32(data.length), ...u32(data.length),
+      ...u16(nameBytes.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0),
+      ...u32(offset),
+      ...nameBytes
+    ];
+    centralDir.push(...central);
+    offset += local.length;
+  });
+
+  const cdStart = offset;
+  zip.push(...centralDir);
+  const cdSize = centralDir.length;
+
+  const end = [
+    ...u32(0x06054b50),
+    ...u16(0), ...u16(0),
+    ...u16(names.length), ...u16(names.length),
+    ...u32(cdSize), ...u32(cdStart),
+    ...u16(0)
+  ];
+  zip.push(...end);
+
+  const blob = new Blob([new Uint8Array(zip)], {type:'application/zip'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '3hc-admin.zip';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+  log.textContent += '✓ Created 3hc-admin.zip\n✓ ' + names.length + ' files packed\n';
+  filesList.classList.remove('hidden');
+  filesList.innerHTML = '<b>Files included:</b><br>' + names.map(n => '• ' + n).join('<br>');
+}
+
+function crc32(data){
+  let crc = 0xFFFFFFFF;
+  const table = crc32.table || (crc32.table = (()=>{
+    const t = new Uint32Array(256);
+    for (let i = 0; i < 256; i++){
+      let c = i;
+      for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      t[i] = c;
+    }
+    return t;
+  })());
+  for (let i = 0; i < data.length; i++){
+    crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+</script>
+</body>
+</html>
