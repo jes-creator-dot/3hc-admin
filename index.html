@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2563eb">
+<meta name="description" content="3HC Trading — Admin System">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="3HC Admin">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles/main.css">
+<link rel="stylesheet" href="./styles/print.css" media="print">
+<title>3HC Trading — Admin System</title>
+</head>
+<body>
+
+<div id="offlineBanner" class="hidden" style="position:fixed;top:0;left:0;right:0;z-index:200;background:#b91c1c;color:#fff;padding:8px 16px;font-size:12px;font-weight:600;text-align:center">
+⚠ You're offline. Changes won't be saved until the connection returns.
+</div>
+
+<div class="app">
+<aside class="sidebar" id="sidebar">
+<div class="brand">
+<b>3HC Trading</b>
+<small>Admin Management System</small>
+</div>
+<nav class="nav" id="nav">
+<button data-page="dashboard" class="active">Dashboard</button>
+<div class="section">People</div>
+<button data-page="hr">HR / Employees</button>
+<button data-page="attendance">Attendance</button>
+<button data-page="leave">Leave</button>
+<button data-page="performance">Performance</button>
+<div class="section">Catalog</div>
+<button data-page="products">Products</button>
+<div class="section">Finance &amp; Operations</div>
+<button data-page="sales">Sales / Orders</button>
+<button data-page="payroll">Payroll</button>
+<button data-page="loans">Cash Advances / Loans</button>
+<button data-page="reports">Reports &amp; Expenses</button>
+<div class="section">System</div>
+<button data-page="announcements">Announcements</button>
+<button data-page="forum">Forum / Discussions</button>
+<button data-page="activity">Activity Log</button>
+</nav>
+</aside>
+
+<main class="main">
+<header class="topbar">
+<div style="display:flex;align-items:center;gap:10px">
+<button class="btn small-btn mobile-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Menu">☰</button>
+<b id="topTitle">Dashboard</b>
+</div>
+<div class="topbar-right">
+<button class="install-btn hidden" id="installBtn" title="Install 3HC Admin">📲 Install</button>
+<span id="syncStatus">Ready</span>
+</div>
+</header>
+
+<section class="page" id="page">
+<div id="page-dashboard" class="view" data-page="dashboard"></div>
+<div id="page-hr" class="view hidden" data-page="hr"></div>
+<div id="page-attendance" class="view hidden" data-page="attendance"></div>
+<div id="page-leave" class="view hidden" data-page="leave"></div>
+<div id="page-performance" class="view hidden" data-page="performance"></div>
+<div id="page-products" class="view hidden" data-page="products"></div>
+<div id="page-sales" class="view hidden" data-page="sales"></div>
+<div id="page-payroll" class="view hidden" data-page="payroll"></div>
+<div id="page-loans" class="view hidden" data-page="loans"></div>
+<div id="page-reports" class="view hidden" data-page="reports"></div>
+<div id="page-announcements" class="view hidden" data-page="announcements"></div>
+<div id="page-forum" class="view hidden" data-page="forum"></div>
+<div id="page-activity" class="view hidden" data-page="activity"></div>
+</section>
+</main>
+</div>
+
+<div class="modal" id="modal">
+<div class="modal-box">
+<div class="modal-head">
+<h2 id="modalTitle">Form</h2>
+<button class="btn" onclick="document.getElementById('modal').classList.remove('open')">Close</button>
+</div>
+<div class="modal-body" id="modalBody"></div>
+<div class="modal-foot" id="modalFoot"></div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="loading" id="loading"><div class="spinner"></div></div>
+
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('./service-worker.js').catch(function(e){console.warn('[SW]',e)});
+  });
+}
+document.querySelectorAll('.nav button[data-page]').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.view').forEach(function(v){v.classList.add('hidden');});
+    var v = document.getElementById('page-' + b.dataset.page);
+    if(v) v.classList.remove('hidden');
+    document.querySelectorAll('.nav button').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    document.getElementById('topTitle').textContent = b.textContent;
+    document.getElementById('sidebar').classList.remove('open');
+  });
+});
+var dd = null;
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  dd = e;
+  document.getElementById('installBtn').classList.remove('hidden');
+});
+document.getElementById('installBtn').addEventListener('click', function(){
+  if(!dd) return;
+  dd.prompt();
+  dd.userChoice.then(function(){ dd = null; });
+});
+window.addEventListener('offline', function(){ document.getElementById('offlineBanner').classList.remove('hidden'); });
+window.addEventListener('online', function(){ document.getElementById('offlineBanner').classList.add('hidden'); });
+if(!navigator.onLine) document.getElementById('offlineBanner').classList.remove('hidden');
+</script>
+</body>
+</html>
